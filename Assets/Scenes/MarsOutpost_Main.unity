@@ -593,7 +593,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe8ff033978327e47bae2935ff7e15c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraOrbit
-  target: {fileID: 0}
+  target: {fileID: 265716717}
   distance: 12
   sensitivity: 3
 --- !u!1 &358288274

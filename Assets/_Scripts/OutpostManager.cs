@@ -1,42 +1,67 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using TMPro;
+
+[System.Serializable]
+public struct NasaMissionEvent
+{
+    public string title;
+    public string crisisType; // "Normal", "SolarFlare", "DustStorm", "ScienceWindow"
+    public string nasaSource;
+    [TextArea] public string kidFriendlyBrief;
+}
 
 public class OutpostManager : MonoBehaviour
 {
     [Header("Mission State")]
     public int currentSol = 1;
     public int maxSols = 7;
-    public bool isCommanderMode = false; // False = Cadet (7-10 yrs), True = Commander (11-14 yrs)
+    public bool isCommanderMode = false;
 
     [Header("Outpost Resources (0 to 100)")]
     public float oxygenAndFood = 80f;
     public float crewHealth = 100f;
-    public float radiationDose = 10f; // High = Danger! (Max 100 = Fail)
+    public float radiationDose = 10f;
     public int scienceScore = 0;
 
     [Header("Power Allocation Sliders (Total = 100%)")]
     public Slider lifeSupportSlider;
     public Slider shieldingSlider;
     public Slider scienceSlider;
+    public Button nextSolButton;
+    public Button replayButton;
+    public TMP_Text modeButtonText;
 
     [Header("3D Visual Feedback Objects")]
     public GameObject shieldDomeVisual;
     public Light outpostMainLight;
     public ParticleSystem dustStormEffect;
 
-    [Header("UI Text References (Member 3 Link Pannuvanga)")]
+    [Header("UI Text References")]
     public TMP_Text solText;
     public TMP_Text statusText;
     public TMP_Text eventLogText;
     public TMP_Text powerSplitText;
+    public TMP_Text dataAttributionText;
 
     private bool isUpdatingSliders = false;
-    private string currentCrisis = "Normal"; // Normal, SolarFlare, DustStorm
+    private bool isTransmitting = false;
+    private NasaMissionEvent activeEvent;
+    private List<NasaMissionEvent> nasaEventPool;
 
     void Start()
     {
-        // Initial 100% split: 40% Life Support, 30% Shield, 30% Science
+        InitNasaDataset();
+
+        if (replayButton != null)
+            replayButton.gameObject.SetActive(false);
+
+        if (modeButtonText != null)
+            modeButtonText.text = isCommanderMode ? "MODE: COMMANDER (11-14y)" : "MODE: CADET (7-10y)";
+
         lifeSupportSlider.value = 40f;
         shieldingSlider.value = 30f;
         scienceSlider.value = 30f;
@@ -49,7 +74,37 @@ public class OutpostManager : MonoBehaviour
         UpdateVisualsAndUI();
     }
 
-    // ZERO-SUM TRADE-OFF LOGIC: Oru slider yethuna matha rendu koraiyum (Sum always 100)
+    void InitNasaDataset()
+    {
+        nasaEventPool = new List<NasaMissionEvent>
+        {
+            new NasaMissionEvent {
+                title = "Clear Martian Skies (-60°C)",
+                crisisType = "Normal",
+                nasaSource = "NASA Curiosity REMS Weather Dataset",
+                kidFriendlyBrief = "Calm winds at Gale Crater! Great time to power up Science & Rover scans, but keep Oxygen above 35%."
+            },
+            new NasaMissionEvent {
+                title = "M-Class Solar Flare Detected!",
+                crisisType = "SolarFlare",
+                nasaSource = "NASA DONKI Space Weather DB (FLR-M5.4)",
+                kidFriendlyBrief = "High-energy solar radiation is hitting Mars! Boost Shielding Power (45%+) or crew radiation risk spikes (NASA OSDR Data)."
+            },
+            new NasaMissionEvent {
+                title = "Regional Dust Storm Approaching",
+                crisisType = "DustStorm",
+                nasaSource = "NASA Mars Reconnaissance Orbiter (MRO)",
+                kidFriendlyBrief = "Thick red dust blocks sunlight — Solar Power drops by 30%! Cut Science power to keep Life Support alive."
+            },
+            new NasaMissionEvent {
+                title = "Subsurface Ice Sample Signal",
+                crisisType = "ScienceWindow",
+                nasaSource = "NASA Perseverance SHERLOC Data",
+                kidFriendlyBrief = "Sensors found water-ice traces nearby! Allocate 40%+ to Science for double research points, at the cost of tonight's shield."
+            }
+        };
+    }
+
     void BalanceSliders(Slider changedSlider)
     {
         if (isUpdatingSliders) return;
@@ -60,97 +115,85 @@ public class OutpostManager : MonoBehaviour
         if (changedSlider == lifeSupportSlider)
         {
             float otherSum = shieldingSlider.value + scienceSlider.value;
-            if (otherSum > 0)
-            {
-                shieldingSlider.value = remaining * (shieldingSlider.value / otherSum);
-                scienceSlider.value = remaining * (scienceSlider.value / otherSum);
-            }
-            else
-            {
-                shieldingSlider.value = remaining / 2f;
-                scienceSlider.value = remaining / 2f;
-            }
+            shieldingSlider.value = (otherSum > 0) ? remaining * (shieldingSlider.value / otherSum) : remaining / 2f;
+            scienceSlider.value = (otherSum > 0) ? remaining * (scienceSlider.value / otherSum) : remaining / 2f;
         }
         else if (changedSlider == shieldingSlider)
         {
             float otherSum = lifeSupportSlider.value + scienceSlider.value;
-            if (otherSum > 0)
-            {
-                lifeSupportSlider.value = remaining * (lifeSupportSlider.value / otherSum);
-                scienceSlider.value = remaining * (scienceSlider.value / otherSum);
-            }
-            else
-            {
-                lifeSupportSlider.value = remaining / 2f;
-                scienceSlider.value = remaining / 2f;
-            }
+            lifeSupportSlider.value = (otherSum > 0) ? remaining * (lifeSupportSlider.value / otherSum) : remaining / 2f;
+            scienceSlider.value = (otherSum > 0) ? remaining * (scienceSlider.value / otherSum) : remaining / 2f;
         }
         else if (changedSlider == scienceSlider)
         {
             float otherSum = lifeSupportSlider.value + shieldingSlider.value;
-            if (otherSum > 0)
-            {
-                lifeSupportSlider.value = remaining * (lifeSupportSlider.value / otherSum);
-                shieldingSlider.value = remaining * (shieldingSlider.value / otherSum);
-            }
-            else
-            {
-                lifeSupportSlider.value = remaining / 2f;
-                shieldingSlider.value = remaining / 2f;
-            }
+            lifeSupportSlider.value = (otherSum > 0) ? remaining * (lifeSupportSlider.value / otherSum) : remaining / 2f;
+            shieldingSlider.value = (otherSum > 0) ? remaining * (shieldingSlider.value / otherSum) : remaining / 2f;
         }
 
         isUpdatingSliders = false;
         UpdateVisualsAndUI();
     }
 
-    // "NEXT SOL" BUTTON CLICK PANNUMBODHU NADAKKURA SIMULATION
     public void AdvanceToNextSol()
     {
-        if (currentSol > maxSols) return;
+        if (currentSol > maxSols || isTransmitting) return;
+        StartCoroutine(SimulateSolWithCommDelay());
+    }
 
-        float lifePower = lifeSupportSlider.value;
-        float shieldPower = shieldingSlider.value;
-        float sciencePower = scienceSlider.value;
+    IEnumerator SimulateSolWithCommDelay()
+    {
+        isTransmitting = true;
+        if (nextSolButton != null) nextSolButton.interactable = false;
 
-        // Dust Storm irundha total power efficiency 30% drop aagum!
-        float efficiency = (currentCrisis == "DustStorm") ? 0.7f : 1.0f;
-        lifePower *= efficiency;
-        shieldPower *= efficiency;
-        sciencePower *= efficiency;
+        eventLogText.text = "[COMM DELAY: 14 MIN MARS-EARTH SIGNAL] Transmitting power commands to outpost...";
+        yield return new WaitForSeconds(2.0f);
 
-        // 1. Life Support Trade-Off Calculation
+        float efficiency = (activeEvent.crisisType == "DustStorm") ? 0.7f : 1.0f;
+        float lifePower = lifeSupportSlider.value * efficiency;
+        float shieldPower = shieldingSlider.value * efficiency;
+        float sciencePower = scienceSlider.value * efficiency;
+
+        // 1. Life Support Trade-Off
         if (lifePower >= 35f)
             oxygenAndFood = Mathf.Clamp(oxygenAndFood + (lifePower - 35f) * 0.5f, 0f, 100f);
         else
             oxygenAndFood = Mathf.Clamp(oxygenAndFood - (35f - lifePower) * 0.8f, 0f, 100f);
 
-        // 2. Radiation Shielding Trade-Off Calculation (NASA DONKI Storm impact)
-        float incomingRadiation = (currentCrisis == "SolarFlare") ? 45f : 15f;
-        if (isCommanderMode) incomingRadiation += 10f;
+        // 2. Radiation Trade-Off
+        float incomingRad = (activeEvent.crisisType == "SolarFlare") ? 45f : 15f;
+        if (isCommanderMode) incomingRad += 10f;
+        radiationDose = Mathf.Clamp(radiationDose + (incomingRad - shieldPower * 0.6f), 0f, 100f);
 
-        float netRadiation = incomingRadiation - (shieldPower * 0.6f);
-        radiationDose = Mathf.Clamp(radiationDose + netRadiation, 0f, 100f);
+        // 3. Science Trade-Off
+        int multiplier = (activeEvent.crisisType == "ScienceWindow") ? 4 : 2;
+        scienceScore += Mathf.RoundToInt(sciencePower * multiplier);
 
-        // 3. Science Output
-        scienceScore += Mathf.RoundToInt(sciencePower * 2f);
-
-        // 4. Crew Health Penalty if O2 low or Radiation high
+        // 4. Crew Health Check
         if (oxygenAndFood < 25f) crewHealth -= 25f;
         if (radiationDose > 60f) crewHealth -= 20f;
         crewHealth = Mathf.Clamp(crewHealth, 0f, 100f);
 
-        // Check Win/Lose
+        isTransmitting = false;
+        if (nextSolButton != null) nextSolButton.interactable = true;
+
+        UpdateVisualsAndUI();
+
         if (crewHealth <= 0f || oxygenAndFood <= 0f || radiationDose >= 100f)
         {
-            eventLogText.text = "MISSION FAILED! Outpost life support or radiation limits breached. Try a better power balance!";
-            return;
+            eventLogText.text = "<b>MISSION FAILED!</b> Outpost breached life support or radiation limits (NASA OSDR Threshold). Click Replay to try again!";
+            if (nextSolButton != null) nextSolButton.interactable = false;
+            if (replayButton != null) replayButton.gameObject.SetActive(true);
+            yield break;
         }
 
         if (currentSol == maxSols)
         {
-            eventLogText.text = $"MISSION ACCOMPLISHED! You survived 7 Sols on Mars! Final Science Score: {scienceScore}";
-            return;
+            string rankBadge = scienceScore >= 700 ? "OUTPOST COMMANDER" : (scienceScore >= 450 ? "MARS SPECIALIST" : "JUNIOR CADET");
+            eventLogText.text = $"<b>MISSION ACCOMPLISHED!</b> 7 Sols Survived on Mars!\nFinal Science Score: {scienceScore} | Rank Earned: <b>{rankBadge}</b>";
+            if (nextSolButton != null) nextSolButton.interactable = false;
+            if (replayButton != null) replayButton.gameObject.SetActive(true);
+            yield break;
         }
 
         currentSol++;
@@ -160,44 +203,48 @@ public class OutpostManager : MonoBehaviour
 
     void TriggerSolEvent()
     {
-        // Grounded in NASA DONKI & Mars Weather scenarios
-        if (currentSol == 2 || currentSol == 5)
-        {
-            currentCrisis = "SolarFlare";
-            eventLogText.text = "[NASA DONKI ALERT] M-Class Solar Flare detected! Radiation surging — boost Shielding Power, or risk crew health!";
-        }
-        else if (currentSol == 4 || currentSol == 6)
-        {
-            currentCrisis = "DustStorm";
-            eventLogText.text = "[MARS WEATHER ALERT] Regional Dust Storm! Solar power dropped by 30%. Prioritize Life Support!";
-        }
+        if (currentSol == 1)
+            activeEvent = nasaEventPool[0];
         else
-        {
-            currentCrisis = "Normal";
-            eventLogText.text = $"[SOL {currentSol}] Clear Martian skies (-60°C). Good window to boost Science & Rover scans!";
-        }
+            activeEvent = nasaEventPool[Random.Range(0, nasaEventPool.Count)];
+
+        eventLogText.text = $"<b>[SOL {currentSol}] {activeEvent.title}</b>\n{activeEvent.kidFriendlyBrief}";
+        if (dataAttributionText != null)
+            dataAttributionText.text = $"Grounded in: {activeEvent.nasaSource}";
+    }
+
+    public void CycleDifficultyMode()
+    {
+        isCommanderMode = !isCommanderMode;
+        if (modeButtonText != null)
+            modeButtonText.text = isCommanderMode ? "MODE: COMMANDER (11-14y)" : "MODE: CADET (7-10y)";
+        UpdateVisualsAndUI();
+    }
+
+    public void RestartMission()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     void UpdateVisualsAndUI()
     {
-        // 3D Visual Feedback
         if (shieldDomeVisual != null)
-            shieldDomeVisual.SetActive(shieldingSlider.value >= 35f); // Shield 35% mela irundha 3D dome theriyum!
+            shieldDomeVisual.SetActive(shieldingSlider.value >= 35f);
 
         if (outpostMainLight != null)
             outpostMainLight.intensity = (lifeSupportSlider.value >= 30f) ? 1.5f : 0.4f;
 
         if (dustStormEffect != null)
         {
-            if (currentCrisis == "DustStorm" && !dustStormEffect.isPlaying) dustStormEffect.Play();
-            else if (currentCrisis != "DustStorm" && dustStormEffect.isPlaying) dustStormEffect.Stop();
+            if (activeEvent.crisisType == "DustStorm" && !dustStormEffect.isPlaying) dustStormEffect.Play();
+            else if (activeEvent.crisisType != "DustStorm" && dustStormEffect.isPlaying) dustStormEffect.Stop();
         }
 
-        // UI Update
-        if (solText != null) solText.text = $"SOL {currentSol} / {maxSols}";
+        string modeLabel = isCommanderMode ? "COMMANDER" : "CADET";
+        if (solText != null) solText.text = $"SOL {currentSol}/{maxSols} [{modeLabel}]";
         if (statusText != null)
-            statusText.text = $"Oxygen/Food: {oxygenAndFood:F0}%  |  Crew Health: {crewHealth:F0}%  |  Radiation: {radiationDose:F0} mSv  |  Science: {scienceScore}";
+            statusText.text = $"O2/Food: {oxygenAndFood:F0}% | Health: {crewHealth:F0}% | Radiation: {radiationDose:F0} mSv | Science: {scienceScore}";
         if (powerSplitText != null)
-            powerSplitText.text = $"Life Support: {lifeSupportSlider.value:F0}%  |  Shield: {shieldingSlider.value:F0}%  |  Science: {scienceSlider.value:F0}%";
+            powerSplitText.text = $"Life Support: {lifeSupportSlider.value:F0}% | Shielding: {shieldingSlider.value:F0}% | Science: {scienceSlider.value:F0}%";
     }
 }

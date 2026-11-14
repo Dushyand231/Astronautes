@@ -1592,6 +1592,9 @@ MonoBehaviour:
   lifeSupportSlider: {fileID: 2045240051}
   shieldingSlider: {fileID: 358288276}
   scienceSlider: {fileID: 1097372499}
+  nextSolButton: {fileID: 0}
+  replayButton: {fileID: 0}
+  modeButtonText: {fileID: 0}
   shieldDomeVisual: {fileID: 1231028318}
   outpostMainLight: {fileID: 410087040}
   dustStormEffect: {fileID: 0}
@@ -1599,6 +1602,7 @@ MonoBehaviour:
   statusText: {fileID: 1281376547}
   eventLogText: {fileID: 191536551}
   powerSplitText: {fileID: 361384170}
+  dataAttributionText: {fileID: 0}
 --- !u!4 &1053577476
 Transform:
   m_ObjectHideFlags: 0

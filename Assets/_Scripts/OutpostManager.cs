@@ -40,6 +40,8 @@ public class OutpostManager : MonoBehaviour
     public Light outpostMainLight;
     public ParticleSystem dustStormEffect;
 
+    
+
     [Header("UI Text References")]
     public TMP_Text solText;
     public TMP_Text statusText;
